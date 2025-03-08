@@ -1,10 +1,7 @@
 services:
-  - type: web
-    name: coin-app
+  - name: cafeteria-app
+    type: web
     env: python
-    buildCommand: |
-      apt-get update && apt-get install -y build-essential gcc
-      pip install -r requirements.txt
-    startCommand: streamlit run app.py
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "streamlit run app.py --server.port $PORT --server.address 0.0.0.0"
     plan: free
-    region: oregon
