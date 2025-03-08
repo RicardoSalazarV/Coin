@@ -1,23 +1,22 @@
 import streamlit as st
-import sqlite3
-from twilio.rest import Client
+import psycopg2
+import os
 
-# Configurar Twilio
-TWILIO_SID = "TU_ACCOUNT_SID"
-TWILIO_AUTH_TOKEN = "TU_AUTH_TOKEN"
-TWILIO_PHONE = "whatsapp:+14155238886"  # Número oficial de Twilio
+# Obtener la URL de la base de datos desde Render (agregar en las variables de entorno)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
+# Función para conectar a la base de datos PostgreSQL
+def conectar_db():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-
+# Crear tabla si no existe
 def crear_tablas():
-    conn = sqlite3.connect("cafeteria.db")
+    conn = conectar_db()
     cursor = conn.cursor()
     
-    # Crea la tabla si no existe
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS menu (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             categoria TEXT NOT NULL,
             nombre TEXT NOT NULL,
             precio REAL NOT NULL
@@ -25,112 +24,72 @@ def crear_tablas():
     ''')
     
     conn.commit()
+    cursor.close()
     conn.close()
-
-# Llamar a la función al iniciar la aplicación
-crear_tablas()
 
 # Función para obtener el menú
 def obtener_menu():
-    conn = sqlite3.connect("cafeteria.db")
+    conn = conectar_db()
     cursor = conn.cursor()
+    
     cursor.execute("SELECT categoria, nombre, precio FROM menu")
-    datos = cursor.fetchall()
+    menu = cursor.fetchall()
+    
+    cursor.close()
     conn.close()
     
-    menu = {}
-    for categoria, nombre, precio in datos:
-        if categoria not in menu:
-            menu[categoria] = {}
-        menu[categoria][nombre] = precio
     return menu
 
-# Función para enviar pedidos
-def enviar_pedido(pedido, telefono):
-    conn = sqlite3.connect("cafeteria.db")
+# Función para agregar un nuevo producto al menú
+def agregar_producto(categoria, nombre, precio):
+    conn = conectar_db()
     cursor = conn.cursor()
-    for item, (cantidad, precio) in pedido.items():
-        total = cantidad * precio
-        cursor.execute("INSERT INTO pedidos (producto, cantidad, total, estado, telefono) VALUES (?, ?, ?, 'Pendiente', ?)", 
-                       (item, cantidad, total, telefono))
-    conn.commit()
-    conn.close()
-
-# Función para obtener pedidos
-def obtener_pedidos():
-    conn = sqlite3.connect("cafeteria.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, producto, cantidad, total, estado, telefono FROM pedidos")
-    pedidos = cursor.fetchall()
-    conn.close()
-    return pedidos
-
-# Función para actualizar estado y notificar al cliente
-def actualizar_estado_pedido(pedido_id, nuevo_estado, telefono, producto):
-    conn = sqlite3.connect("cafeteria.db")
-    cursor = conn.cursor()
-    cursor.execute("UPDATE pedidos SET estado = ? WHERE id = ?", (nuevo_estado, pedido_id))
-    conn.commit()
-    conn.close()
     
-    # Enviar notificación si el pedido está listo
-    if nuevo_estado == "Elaborado":
-        mensaje = f"✅ Tu pedido de {producto} está listo para recoger. ¡Gracias por tu compra! ☕"
-        client.messages.create(
-            from_=TWILIO_PHONE,
-            body=mensaje,
-            to=f"whatsapp:{telefono}"
-        )
-
-# Función para verificar administrador
-def verificar_admin(usuario, contraseña):
-    conn = sqlite3.connect("cafeteria.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM administradores WHERE usuario = ? AND contraseña = ?", (usuario, contraseña))
-    admin = cursor.fetchone()
+    cursor.execute("INSERT INTO menu (categoria, nombre, precio) VALUES (%s, %s, %s)", 
+                   (categoria, nombre, precio))
+    
+    conn.commit()
+    cursor.close()
     conn.close()
-    return admin is not None
 
-# Sección de menú para clientes
+# Función para realizar un pedido
+def realizar_pedido(producto, cantidad):
+    st.success(f"Pedido recibido: {cantidad}x {producto}. ¡Gracias!")
+
+# Llamar a la función de creación de tablas al iniciar
+crear_tablas()
+
+# Interfaz de la aplicación con Streamlit
 st.title("Menú de la Cafetería ☕")
+
+# Mostrar el menú actual
+st.subheader("📜 Menú Disponible")
 menu = obtener_menu()
-pedido = {}
-telefono = st.text_input("📞 Ingresa tu número de WhatsApp (+52... para México)", max_chars=15)
 
-for categoria, items in menu.items():
-    with st.expander(f"🍽️ {categoria}"):
-        for item, precio in items.items():
-            cantidad = st.number_input(f"{item} - ${precio} MXN", min_value=0, max_value=10, step=1, key=item)
-            if cantidad > 0:
-                pedido[item] = (cantidad, precio)
+if menu:
+    for categoria, nombre, precio in menu:
+        st.write(f"**{categoria}** - {nombre}: ${precio:.2f}")
+else:
+    st.warning("No hay productos en el menú.")
 
-if pedido and telefono:
-    if st.button("🛒 Enviar Pedido"):
-        enviar_pedido(pedido, telefono)
-        st.success("✅ Pedido enviado correctamente.")
+# Sección para agregar nuevos productos (solo administradores)
+st.subheader("➕ Agregar Producto al Menú")
+categoria = st.text_input("Categoría")
+nombre = st.text_input("Nombre del Producto")
+precio = st.number_input("Precio", min_value=0.0, format="%.2f")
 
-# Panel de administración
-st.sidebar.title("📋 Panel de Administración")
-usuario = st.sidebar.text_input("Usuario")
-contraseña = st.sidebar.text_input("Contraseña", type="password")
-login_button = st.sidebar.button("Iniciar sesión")
+if st.button("Agregar Producto"):
+    if categoria and nombre and precio > 0:
+        agregar_producto(categoria, nombre, precio)
+        st.success(f"Producto {nombre} agregado con éxito.")
+    else:
+        st.error("Por favor, completa todos los campos.")
 
-if login_button and verificar_admin(usuario, contraseña):
-    st.sidebar.success("Acceso concedido")
-    st.title("📦 Pedidos en Cocina")
+# Sección para realizar pedidos
+st.subheader("🛒 Realizar Pedido")
+productos = [f"{nombre} - ${precio:.2f}" for _, nombre, precio in menu]
+producto_seleccionado = st.selectbox("Selecciona un producto", productos)
+cantidad = st.number_input("Cantidad", min_value=1, step=1)
 
-    pedidos = obtener_pedidos()
-    if pedidos:
-        for pedido_id, producto, cantidad, total, estado, telefono in pedidos:
-            col1, col2, col3 = st.columns([2, 1, 1])
-            with col1:
-                st.write(f"🍽️ {cantidad} x {producto} - ${total} MXN")
-            with col2:
-                st.write(f"📌 Estado: {estado}")
-            with col3:
-                if estado == "Pendiente":
-                    if st.button(f"✅ Marcar como Elaborado", key=f"elab_{pedido_id}"):
-                        actualizar_estado_pedido(pedido_id, "Elaborado", telefono, producto)
-                        st.experimental_rerun()
-                elif estado == "Elaborado":
-                    st.write("✔️ Listo")
+if st.button("Hacer Pedido"):
+    realizar_pedido(producto_seleccionado, cantidad)
