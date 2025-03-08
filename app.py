@@ -9,6 +9,27 @@ TWILIO_PHONE = "whatsapp:+14155238886"  # Número oficial de Twilio
 
 client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
+
+def crear_tablas():
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    
+    # Crea la tabla si no existe
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS menu (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT NOT NULL,
+            nombre TEXT NOT NULL,
+            precio REAL NOT NULL
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# Llamar a la función al iniciar la aplicación
+crear_tablas()
+
 # Función para obtener el menú
 def obtener_menu():
     conn = sqlite3.connect("cafeteria.db")
