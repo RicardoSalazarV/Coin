@@ -1,7 +1,0 @@
-services:
-  - name: cafeteria-app
-    type: web
-    env: python
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "streamlit run app.py --server.port 1000 --server.address 0.0.0.0"
-    plan: free
