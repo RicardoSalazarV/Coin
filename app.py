@@ -2,9 +2,10 @@ import streamlit as st
 import psycopg2
 import os
 
-# Obtener la URL de la base de datos desde Render (agregar en las variables de entorno)
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL").replace("postgres://", "postgresql://")
 
+def conectar_db():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 # Función para conectar a la base de datos PostgreSQL
 def conectar_db():
     return psycopg2.connect(DATABASE_URL, sslmode="require")
