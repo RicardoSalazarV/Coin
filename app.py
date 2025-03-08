@@ -1,60 +1,115 @@
-import pandas as pd
-import scipy.stats
 import streamlit as st
-import time
+import sqlite3
+from twilio.rest import Client
 
-# Variables de estado que se conservan cuando Streamlit vuelve a ejecutar este script
-if 'experiment_no' not in st.session_state:
-    st.session_state['experiment_no'] = 0
+# Configurar Twilio
+TWILIO_SID = "TU_ACCOUNT_SID"
+TWILIO_AUTH_TOKEN = "TU_AUTH_TOKEN"
+TWILIO_PHONE = "whatsapp:+14155238886"  # Número oficial de Twilio
 
-if 'df_experiment_results' not in st.session_state:
-    st.session_state['df_experiment_results'] = pd.DataFrame(columns=['no', 'iterations', 'mean'])
+client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
 
-st.header('Lanzar una moneda')
+# Función para obtener el menú
+def obtener_menu():
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT categoria, nombre, precio FROM menu")
+    datos = cursor.fetchall()
+    conn.close()
+    
+    menu = {}
+    for categoria, nombre, precio in datos:
+        if categoria not in menu:
+            menu[categoria] = {}
+        menu[categoria][nombre] = precio
+    return menu
 
-# Gráfico inicial con un valor fijo
-chart = st.line_chart([0.5])
+# Función para enviar pedidos
+def enviar_pedido(pedido, telefono):
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    for item, (cantidad, precio) in pedido.items():
+        total = cantidad * precio
+        cursor.execute("INSERT INTO pedidos (producto, cantidad, total, estado, telefono) VALUES (?, ?, ?, 'Pendiente', ?)", 
+                       (item, cantidad, total, telefono))
+    conn.commit()
+    conn.close()
 
-# Función para realizar los lanzamientos de moneda
-def toss_coin(n):
-    trial_outcomes = scipy.stats.bernoulli.rvs(p=0.5, size=n)
+# Función para obtener pedidos
+def obtener_pedidos():
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, producto, cantidad, total, estado, telefono FROM pedidos")
+    pedidos = cursor.fetchall()
+    conn.close()
+    return pedidos
 
-    mean = None
-    outcome_no = 0
-    outcome_1_count = 0
+# Función para actualizar estado y notificar al cliente
+def actualizar_estado_pedido(pedido_id, nuevo_estado, telefono, producto):
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE pedidos SET estado = ? WHERE id = ?", (nuevo_estado, pedido_id))
+    conn.commit()
+    conn.close()
+    
+    # Enviar notificación si el pedido está listo
+    if nuevo_estado == "Elaborado":
+        mensaje = f"✅ Tu pedido de {producto} está listo para recoger. ¡Gracias por tu compra! ☕"
+        client.messages.create(
+            from_=TWILIO_PHONE,
+            body=mensaje,
+            to=f"whatsapp:{telefono}"
+        )
 
-    for r in trial_outcomes:
-        outcome_no += 1
-        if r == 1:
-            outcome_1_count += 1
-        mean = outcome_1_count / outcome_no
-        chart.add_rows([mean])
-        time.sleep(0.05)  # Simulación del proceso de forma visual
+# Función para verificar administrador
+def verificar_admin(usuario, contraseña):
+    conn = sqlite3.connect("cafeteria.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM administradores WHERE usuario = ? AND contraseña = ?", (usuario, contraseña))
+    admin = cursor.fetchone()
+    conn.close()
+    return admin is not None
 
-    return mean
+# Sección de menú para clientes
+st.title("Menú de la Cafetería ☕")
+menu = obtener_menu()
+pedido = {}
+telefono = st.text_input("📞 Ingresa tu número de WhatsApp (+52... para México)", max_chars=15)
 
-# Selector de número de intentos
-number_of_trials = st.slider('¿Número de intentos?', 1, 1000, 10)
+for categoria, items in menu.items():
+    with st.expander(f"🍽️ {categoria}"):
+        for item, precio in items.items():
+            cantidad = st.number_input(f"{item} - ${precio} MXN", min_value=0, max_value=10, step=1, key=item)
+            if cantidad > 0:
+                pedido[item] = (cantidad, precio)
 
-# Botón para iniciar el experimento
-start_button = st.button('Ejecutar')
+if pedido and telefono:
+    if st.button("🛒 Enviar Pedido"):
+        enviar_pedido(pedido, telefono)
+        st.success("✅ Pedido enviado correctamente.")
 
-if start_button:  # Asegúrate de que esta línea esté alineada correctamente y que el botón esté declarado antes de este uso
-    st.write(f'Experimento con {number_of_trials} intentos en curso.')
-    st.session_state['experiment_no'] += 1
-    mean = toss_coin(number_of_trials)
+# Panel de administración
+st.sidebar.title("📋 Panel de Administración")
+usuario = st.sidebar.text_input("Usuario")
+contraseña = st.sidebar.text_input("Contraseña", type="password")
+login_button = st.sidebar.button("Iniciar sesión")
 
-    # Agregar resultados al DataFrame de experimentos
-    st.session_state['df_experiment_results'] = pd.concat(
-        [
-            st.session_state['df_experiment_results'],
-            pd.DataFrame(
-                data=[[st.session_state['experiment_no'], number_of_trials, mean]],
-                columns=['no', 'iterations', 'mean']
-            )
-        ],
-        axis=0
-    ).reset_index(drop=True)
+if login_button and verificar_admin(usuario, contraseña):
+    st.sidebar.success("Acceso concedido")
+    st.title("📦 Pedidos en Cocina")
 
-# Mostrar el DataFrame de resultados
-st.write(st.session_state['df_experiment_results'])
+    pedidos = obtener_pedidos()
+    if pedidos:
+        for pedido_id, producto, cantidad, total, estado, telefono in pedidos:
+            col1, col2, col3 = st.columns([2, 1, 1])
+            with col1:
+                st.write(f"🍽️ {cantidad} x {producto} - ${total} MXN")
+            with col2:
+                st.write(f"📌 Estado: {estado}")
+            with col3:
+                if estado == "Pendiente":
+                    if st.button(f"✅ Marcar como Elaborado", key=f"elab_{pedido_id}"):
+                        actualizar_estado_pedido(pedido_id, "Elaborado", telefono, producto)
+                        st.experimental_rerun()
+                elif estado == "Elaborado":
+                    st.write("✔️ Listo")
