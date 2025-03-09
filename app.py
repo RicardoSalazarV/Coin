@@ -2,95 +2,129 @@ import streamlit as st
 import psycopg2
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL").replace("postgres://", "postgresql://")
+# Obtener la URL de la base de datos desde las variables de entorno
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-def conectar_db():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
-# Función para conectar a la base de datos PostgreSQL
-def conectar_db():
-    return psycopg2.connect(DATABASE_URL, sslmode="require")
+if not DATABASE_URL:
+    raise ValueError("🚨 ERROR: La variable de entorno DATABASE_URL no está definida.")
 
-# Crear tabla si no existe
+# Asegurar que la URL usa "postgresql://" en lugar de "postgres://"
+DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://")
+
+# Función para conectar a la base de datos
+def conectar_db():
+    try:
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+        return conn
+    except Exception as e:
+        st.error(f"❌ ERROR: No se pudo conectar a la base de datos. Detalles: {e}")
+        raise
+
+# Función para crear las tablas si no existen
 def crear_tablas():
     conn = conectar_db()
     cursor = conn.cursor()
-    
-    cursor.execute('''
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS menu (
             id SERIAL PRIMARY KEY,
             categoria TEXT NOT NULL,
             nombre TEXT NOT NULL,
-            precio REAL NOT NULL
-        )
-    ''')
+            precio NUMERIC NOT NULL
+        );
+    """)
     
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pedidos (
+            id SERIAL PRIMARY KEY,
+            nombre_cliente TEXT NOT NULL,
+            productos TEXT NOT NULL,
+            total NUMERIC NOT NULL,
+            estado TEXT DEFAULT 'Pendiente'
+        );
+    """)
+
     conn.commit()
     cursor.close()
     conn.close()
 
-# Función para obtener el menú
+# Función para obtener el menú de la base de datos
 def obtener_menu():
     conn = conectar_db()
     cursor = conn.cursor()
-    
     cursor.execute("SELECT categoria, nombre, precio FROM menu")
     menu = cursor.fetchall()
-    
     cursor.close()
     conn.close()
-    
     return menu
 
-# Función para agregar un nuevo producto al menú
-def agregar_producto(categoria, nombre, precio):
+# Función para registrar un pedido
+def registrar_pedido(nombre_cliente, productos, total):
     conn = conectar_db()
     cursor = conn.cursor()
-    
-    cursor.execute("INSERT INTO menu (categoria, nombre, precio) VALUES (%s, %s, %s)", 
-                   (categoria, nombre, precio))
-    
+    cursor.execute("INSERT INTO pedidos (nombre_cliente, productos, total) VALUES (%s, %s, %s)",
+                   (nombre_cliente, productos, total))
     conn.commit()
     cursor.close()
     conn.close()
 
-# Función para realizar un pedido
-def realizar_pedido(producto, cantidad):
-    st.success(f"Pedido recibido: {cantidad}x {producto}. ¡Gracias!")
+# Función para obtener los pedidos pendientes
+def obtener_pedidos():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nombre_cliente, productos, total, estado FROM pedidos WHERE estado = 'Pendiente'")
+    pedidos = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return pedidos
 
-# Llamar a la función de creación de tablas al iniciar
-crear_tablas()
+# Función para actualizar el estado de un pedido
+def actualizar_estado_pedido(pedido_id, nuevo_estado):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE pedidos SET estado = %s WHERE id = %s", (nuevo_estado, pedido_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-# Interfaz de la aplicación con Streamlit
-st.title("Menú de la Cafetería ☕")
+# ---------------------- INTERFAZ STREAMLIT ----------------------
 
-# Mostrar el menú actual
-st.subheader("📜 Menú Disponible")
+st.title("☕ Menú de la Cafetería")
+
+# Mostrar el menú
+st.header("Menú Disponible")
 menu = obtener_menu()
-
 if menu:
     for categoria, nombre, precio in menu:
-        st.write(f"**{categoria}** - {nombre}: ${precio:.2f}")
+        st.write(f"**{nombre}** - {categoria} - ${precio:.2f}")
 else:
     st.warning("No hay productos en el menú.")
 
-# Sección para agregar nuevos productos (solo administradores)
-st.subheader("➕ Agregar Producto al Menú")
-categoria = st.text_input("Categoría")
-nombre = st.text_input("Nombre del Producto")
-precio = st.number_input("Precio", min_value=0.0, format="%.2f")
+# Formulario para hacer pedidos
+st.header("🛒 Hacer un Pedido")
+nombre_cliente = st.text_input("Nombre del Cliente")
+productos = st.text_area("Productos (separados por comas)")
+total = st.number_input("Total a pagar", min_value=0.0, format="%.2f")
 
-if st.button("Agregar Producto"):
-    if categoria and nombre and precio > 0:
-        agregar_producto(categoria, nombre, precio)
-        st.success(f"Producto {nombre} agregado con éxito.")
+if st.button("Enviar Pedido"):
+    if nombre_cliente and productos and total > 0:
+        registrar_pedido(nombre_cliente, productos, total)
+        st.success("✅ Pedido registrado correctamente.")
     else:
-        st.error("Por favor, completa todos los campos.")
+        st.error("⚠️ Todos los campos son obligatorios.")
 
-# Sección para realizar pedidos
-st.subheader("🛒 Realizar Pedido")
-productos = [f"{nombre} - ${precio:.2f}" for _, nombre, precio in menu]
-producto_seleccionado = st.selectbox("Selecciona un producto", productos)
-cantidad = st.number_input("Cantidad", min_value=1, step=1)
+# Sección para administrar pedidos
+st.header("📦 Pedidos Pendientes")
+pedidos = obtener_pedidos()
+if pedidos:
+    for pedido in pedidos:
+        pedido_id, nombre_cliente, productos, total, estado = pedido
+        st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
+        st.write(f"📋 Productos: {productos}")
+        if st.button(f"Marcar como Completado #{pedido_id}"):
+            actualizar_estado_pedido(pedido_id, "Completado")
+            st.success(f"✅ Pedido #{pedido_id} completado.")
+else:
+    st.info("No hay pedidos pendientes.")
 
-if st.button("Hacer Pedido"):
-    realizar_pedido(producto_seleccionado, cantidad)
+# Ejecutar la función de creación de tablas al inicio
+crear_tablas()
