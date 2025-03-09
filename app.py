@@ -199,10 +199,10 @@ elif seccion == "Panel de Administración":
         st.header("🗑️ Eliminar Producto del Menú")
         menu = obtener_menu()
         if menu:
-            opciones = {f"{nombre} - {categoria} - ${precio:.2f}": i for i, (categoria, nombre, precio) in enumerate(menu)}
+            opciones = {f"{nombre} - {categoria} - ${precio:.2f}": i for i, (producto_id, categoria, nombre, precio) in enumerate(menu)}
             seleccion = st.selectbox("Selecciona un producto para eliminar", list(opciones.keys()))
             if st.button("Eliminar Producto"):
-                producto_id = opciones[seleccion] + 1  # Ajustar ID según la base de datos
+                producto_id = opciones[seleccion]  # Obtener el ID correcto del producto
                 eliminar_producto(producto_id)
                 st.success("✅ Producto eliminado correctamente.")
         else:
