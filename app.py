@@ -165,50 +165,50 @@ elif seccion == "Panel de Administración":
     clave = st.text_input("Código de acceso", type="password")
     
     if usuario == "admin" and clave == "1234":
-    st.success("🔓 Acceso concedido")
+        st.success("🔓 Acceso concedido")
 
-    # Agregar producto al menú
-    st.header("📋 Agregar Producto al Menú")
-    nombre = st.text_input("Nombre del Producto")
-    categoria = st.text_input("Categoría")
-    precio = st.number_input("Precio", min_value=0.0, format="%.2f")
+        # Agregar producto al menú
+        st.header("📋 Agregar Producto al Menú")
+        nombre = st.text_input("Nombre del Producto")
+        categoria = st.text_input("Categoría")
+        precio = st.number_input("Precio", min_value=0.0, format="%.2f")
 
-    if st.button("Agregar Producto"):
-        if nombre and categoria and precio > 0:
-            agregar_producto(nombre, categoria, precio)
-            st.success("✅ Producto agregado al menú.")
+        if st.button("Agregar Producto"):
+            if nombre and categoria and precio > 0:
+                agregar_producto(nombre, categoria, precio)
+                st.success("✅ Producto agregado al menú.")
+            else:
+                st.error("⚠️ Todos los campos son obligatorios.")
+
+        # Eliminar producto del menú
+        st.header("🗑️ Eliminar Producto del Menú")
+        menu = obtener_menu()
+        if menu:
+            opciones = {f"{nombre} - {categoria} - ${precio:.2f}": i for i, (categoria, nombre, precio) in enumerate(menu)}
+            seleccion = st.selectbox("Selecciona un producto para eliminar", list(opciones.keys()))
+            if st.button("Eliminar Producto"):
+                producto_id = opciones[seleccion] + 1  # Ajustar ID según la base de datos
+                eliminar_producto(producto_id)
+                st.success("✅ Producto eliminado correctamente.")
         else:
-            st.error("⚠️ Todos los campos son obligatorios.")
+            st.warning("No hay productos en el menú.")
 
-    # Eliminar producto del menú
-    st.header("🗑️ Eliminar Producto del Menú")
-    menu = obtener_menu()
-    if menu:
-        opciones = {f"{nombre} - {categoria} - ${precio:.2f}": i for i, (categoria, nombre, precio) in enumerate(menu)}
-        seleccion = st.selectbox("Selecciona un producto para eliminar", list(opciones.keys()))
-        if st.button("Eliminar Producto"):
-            producto_id = opciones[seleccion] + 1  # Ajustar ID según la base de datos
-            eliminar_producto(producto_id)
-            st.success("✅ Producto eliminado correctamente.")
+        # Gestión de pedidos
+        st.header("📦 Pedidos Pendientes")
+        pedidos = obtener_pedidos()
+        if pedidos:
+            for pedido in pedidos:
+                pedido_id, nombre_cliente, productos, total, estado = pedido
+                st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
+                st.write(f"📋 Productos: {productos}")
+                if st.button(f"Marcar como Listo #{pedido_id}"):
+                    actualizar_estado_pedido(pedido_id, "Listo")
+                    enviar_whatsapp(f"✅ {nombre_cliente}, tu pedido está listo para recoger. ☕", numero_cliente)
+                    st.success(f"✅ Pedido #{pedido_id} marcado como Listo.")
+        else:
+            st.info("No hay pedidos pendientes.")
     else:
-        st.warning("No hay productos en el menú.")
-
-    # Gestión de pedidos
-    st.header("📦 Pedidos Pendientes")
-    pedidos = obtener_pedidos()
-    if pedidos:
-        for pedido in pedidos:
-            pedido_id, nombre_cliente, productos, total, estado = pedido
-            st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
-            st.write(f"📋 Productos: {productos}")
-            if st.button(f"Marcar como Listo #{pedido_id}"):
-                actualizar_estado_pedido(pedido_id, "Listo")
-                enviar_whatsapp(f"✅ {nombre_cliente}, tu pedido está listo para recoger. ☕", numero_cliente)
-                st.success(f"✅ Pedido #{pedido_id} marcado como Listo.")
-    else:
-        st.info("No hay pedidos pendientes.")
-else:
-    st.warning("🚫 Acceso denegado. Introduzca credenciales válidas.")
+        st.warning("🚫 Acceso denegado. Introduzca credenciales válidas.")
 
 # Ejecutar la creación de tablas al iniciar
 crear_tablas()
