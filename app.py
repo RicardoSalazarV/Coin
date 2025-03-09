@@ -48,6 +48,37 @@ def obtener_menu():
     conn.close()
     return menu
 
+def crear_tablas():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    
+    cursor.execute("DROP TABLE IF EXISTS pedidos CASCADE;")
+    cursor.execute("DROP TABLE IF EXISTS menu CASCADE;")
+    
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS menu (
+            id SERIAL PRIMARY KEY,
+            categoria TEXT NOT NULL,
+            nombre TEXT NOT NULL,
+            precio NUMERIC NOT NULL
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS pedidos (
+            id SERIAL PRIMARY KEY,
+            nombre_cliente TEXT NOT NULL,
+            numero_cliente TEXT NOT NULL,
+            productos TEXT NOT NULL,
+            total NUMERIC NOT NULL,
+            estado TEXT DEFAULT 'Pendiente'
+        );
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 def registrar_pedido(nombre_cliente, numero_cliente, productos, total):
     conn = conectar_db()
     cursor = conn.cursor()
