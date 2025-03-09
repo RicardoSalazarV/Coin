@@ -84,8 +84,9 @@ def registrar_pedido(nombre_cliente, productos, total):
     cursor.close()
     conn.close()
     
-    mensaje = f"📌 Nuevo Pedido de {nombre_cliente}\nProductos: {productos}\nTotal: ${total:.2f}"
-    enviar_whatsapp(mensaje)
+mensaje = f"\ud83d\udccd *Nuevo Pedido de {nombre_cliente}*\n📋 Productos: {productos}\n💲 Total: ${total:.2f}"
+enviar_whatsapp(mensaje)
+enviar_whatsapp("✅ Tu pedido ha sido registrado. Te avisaremos cuando esté listo. ☕", numero_cliente)
 
 def obtener_pedidos():
     conn = conectar_db()
@@ -133,27 +134,38 @@ if seccion == "Página Principal":
     # Mostrar menú
     st.header("Menú Disponible")
     menu = obtener_menu()
-    if menu:
-        for categoria, nombre, precio in menu:
-            st.write(f"**{nombre}** - {categoria} - ${precio:.2f}")
-    else:
-        st.warning("No hay productos en el menú.")
-
-    # Formulario para pedidos
+    if not menu:
+        st.warning("⚠️ No hay productos en el menú.")
+    
+    # Selección de productos con lista desplegable
     st.header("🛒 Hacer un Pedido")
     nombre_cliente = st.text_input("Nombre del Cliente")
-    productos = st.text_area("Productos (separados por comas)")
-    total = st.number_input("Total a pagar", min_value=0.0, format="%.2f")
-
+    numero_cliente = st.text_input("Número de WhatsApp (+52...)")
+    seleccionados = st.multiselect("Selecciona los productos", [f"{nombre} - ${precio:.2f}" for _, nombre, _, precio in menu])
+    
+    if seleccionados:
+        total = sum([float(op.split("$")[-1]) for op in seleccionados])
+        st.subheader(f"💰 Total: ${total:.2f}")
+    else:
+        total = 0.0
+    
     if st.button("Enviar Pedido"):
-        if nombre_cliente and productos and total > 0:
-            registrar_pedido(nombre_cliente, productos, total)
-            st.success("✅ Pedido registrado correctamente.")
+        if nombre_cliente and numero_cliente and seleccionados:
+            productos = ", ".join(seleccionados)
+            if st.confirm("¿Confirmar pedido?", "Esta acción no se puede deshacer."):
+                registrar_pedido(nombre_cliente, numero_cliente, productos, total)
+                st.success("✅ Pedido registrado correctamente. Recibirás un mensaje cuando esté listo.")
         else:
             st.error("⚠️ Todos los campos son obligatorios.")
 
 elif seccion == "Panel de Administración":
     st.title("🔧 Panel de Administración")
+
+    usuario = st.text_input("Usuario")
+    clave = st.text_input("Código de acceso", type="password")
+    
+    if usuario == "admin" and clave == "1234":
+    st.success("🔓 Acceso concedido")
 
     # Agregar producto al menú
     st.header("📋 Agregar Producto al Menú")
@@ -189,11 +201,14 @@ elif seccion == "Panel de Administración":
             pedido_id, nombre_cliente, productos, total, estado = pedido
             st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
             st.write(f"📋 Productos: {productos}")
-            if st.button(f"Marcar como Completado #{pedido_id}"):
-                actualizar_estado_pedido(pedido_id, "Completado")
-                st.success(f"✅ Pedido #{pedido_id} completado.")
+            if st.button(f"Marcar como Listo #{pedido_id}"):
+                actualizar_estado_pedido(pedido_id, "Listo")
+                enviar_whatsapp(f"✅ {nombre_cliente}, tu pedido está listo para recoger. ☕", numero_cliente)
+                st.success(f"✅ Pedido #{pedido_id} marcado como Listo.")
     else:
         st.info("No hay pedidos pendientes.")
+else:
+    st.warning("🚫 Acceso denegado. Introduzca credenciales válidas.")
 
 # Ejecutar la creación de tablas al iniciar
 crear_tablas()
