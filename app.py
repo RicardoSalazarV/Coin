@@ -52,9 +52,6 @@ def crear_tablas():
     conn = conectar_db()
     cursor = conn.cursor()
     
-    cursor.execute("DROP TABLE IF EXISTS pedidos CASCADE;")
-    cursor.execute("DROP TABLE IF EXISTS menu CASCADE;")
-    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS menu (
             id SERIAL PRIMARY KEY,
@@ -129,11 +126,13 @@ def eliminar_producto(producto_id):
     conn.close()
 
 # ---------------------- INTERFAZ ----------------------
-
 st.set_page_config(page_title="Cafetería", page_icon="☕", layout="wide")
 
 # Opciones de navegación
 seccion = st.sidebar.radio("Navegación", ["Página Principal", "Panel de Administración"])
+
+# Crear tablas solo si no existen
+crear_tablas()
 
 if seccion == "Página Principal":
     st.title("☕ Menú de la Cafetería")
@@ -224,5 +223,3 @@ elif seccion == "Panel de Administración":
     else:
         st.warning("🚫 Acceso denegado. Introduzca credenciales válidas.")
 
-# Ejecutar la creación de tablas al iniciar
-crear_tablas()
