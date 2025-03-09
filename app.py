@@ -92,6 +92,42 @@ def registrar_pedido(nombre_cliente, numero_cliente, productos, total):
     enviar_whatsapp(mensaje, numero_cliente)
     enviar_whatsapp("✅ Tu pedido ha sido registrado. Te avisaremos cuando esté listo. ☕", numero_cliente)
 
+def obtener_pedidos():
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nombre_cliente, numero_cliente, productos, total, estado FROM pedidos WHERE estado = 'Pendiente'")
+    pedidos = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return pedidos
+
+def actualizar_estado_pedido(pedido_id, nuevo_estado, numero_cliente):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE pedidos SET estado = %s WHERE id = %s", (nuevo_estado, pedido_id))
+    conn.commit()
+    cursor.close()
+    conn.close()
+    
+    if nuevo_estado == "Listo":
+        enviar_whatsapp(f"✅ Tu pedido #{pedido_id} está listo para recoger. ☕", numero_cliente)
+
+def agregar_producto(nombre, categoria, precio):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO menu (nombre, categoria, precio) VALUES (%s, %s, %s)", (nombre, categoria, precio))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def eliminar_producto(producto_id):
+    conn = conectar_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM menu WHERE id = %s", (producto_id,))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
 # ---------------------- INTERFAZ ----------------------
 
 st.set_page_config(page_title="Cafetería", page_icon="☕", layout="wide")
