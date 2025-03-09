@@ -126,6 +126,7 @@ def eliminar_producto(producto_id):
     conn.close()
 
 # ---------------------- INTERFAZ ----------------------
+
 st.set_page_config(page_title="Cafetería", page_icon="☕", layout="wide")
 
 # Opciones de navegación
@@ -149,9 +150,9 @@ if seccion == "Página Principal":
         pedido = {}
         total = 0.0
         for producto_id, categoria, nombre, precio in menu:
-            cantidad = st.number_input(f"{nombre} - ${precio:.2f}", min_value=0, max_value=10, value=0, step=1)
+            cantidad = st.number_input(f"{nombre} - ${float(precio):.2f}", min_value=0, max_value=10, value=0, step=1)
             if cantidad > 0:
-                pedido[nombre] = (cantidad, precio)
+                pedido[nombre] = (cantidad, float(precio))
         
         if pedido:
             st.subheader("🧾 Resumen del Pedido")
@@ -198,7 +199,7 @@ elif seccion == "Panel de Administración":
         st.header("🗑️ Eliminar Producto del Menú")
         menu = obtener_menu()
         if menu:
-            opciones = {f"{nombre} - {categoria} - ${precio:.2f}": i for i, (producto_id, categoria, nombre, precio) in enumerate(menu)}
+            opciones = {f"{nombre} - {categoria} - ${float(precio):.2f}": i for i, (producto_id, categoria, nombre, precio) in enumerate(menu)}
             seleccion = st.selectbox("Selecciona un producto para eliminar", list(opciones.keys()))
             if st.button("Eliminar Producto"):
                 producto_id = opciones[seleccion]  # Obtener el ID correcto del producto
@@ -222,4 +223,3 @@ elif seccion == "Panel de Administración":
             st.info("No hay pedidos pendientes.")
     else:
         st.warning("🚫 Acceso denegado. Introduzca credenciales válidas.")
-
