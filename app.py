@@ -20,13 +20,13 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
 ADMIN_WHATSAPP_NUMBER = os.getenv("ADMIN_WHATSAPP_NUMBER")
 
-def enviar_whatsapp(mensaje):
+def enviar_whatsapp(mensaje, numero_cliente):
     if TWILIO_SID and TWILIO_AUTH_TOKEN:
         client = Client(TWILIO_SID, TWILIO_AUTH_TOKEN)
         client.messages.create(
             body=mensaje,
             from_=f"whatsapp:{TWILIO_WHATSAPP_NUMBER}",
-            to=f"whatsapp:{ADMIN_WHATSAPP_NUMBER}"
+            to=f"whatsapp:{numero_cliente}"
         )
 
 # ---------------------- BASE DE DATOS ----------------------
@@ -75,7 +75,7 @@ def obtener_menu():
     conn.close()
     return menu
 
-def registrar_pedido(nombre_cliente, productos, total):
+def registrar_pedido(nombre_cliente, numero_cliente, productos, total):
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("INSERT INTO pedidos (nombre_cliente, productos, total) VALUES (%s, %s, %s)",
@@ -84,9 +84,9 @@ def registrar_pedido(nombre_cliente, productos, total):
     cursor.close()
     conn.close()
     
-mensaje = f"\ud83d\udccd *Nuevo Pedido de {nombre_cliente}*\n📋 Productos: {productos}\n💲 Total: ${total:.2f}"
-enviar_whatsapp(mensaje)
-enviar_whatsapp("✅ Tu pedido ha sido registrado. Te avisaremos cuando esté listo. ☕", numero_cliente)
+    mensaje = f"📌 *Nuevo Pedido de {nombre_cliente}*\n📋 Productos: {productos}\n💲 Total: ${total:.2f}"
+    enviar_whatsapp(mensaje, numero_cliente)
+    enviar_whatsapp("✅ Tu pedido ha sido registrado. Te avisaremos cuando esté listo. ☕", numero_cliente)
 
 def obtener_pedidos():
     conn = conectar_db()
@@ -97,13 +97,16 @@ def obtener_pedidos():
     conn.close()
     return pedidos
 
-def actualizar_estado_pedido(pedido_id, nuevo_estado):
+def actualizar_estado_pedido(pedido_id, nuevo_estado, numero_cliente):
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("UPDATE pedidos SET estado = %s WHERE id = %s", (nuevo_estado, pedido_id))
     conn.commit()
     cursor.close()
     conn.close()
+    
+    if nuevo_estado == "Listo":
+        enviar_whatsapp(f"✅ Tu pedido #{pedido_id} está listo para recoger. ☕", numero_cliente)
 
 def agregar_producto(nombre, categoria, precio):
     conn = conectar_db()
@@ -202,8 +205,7 @@ elif seccion == "Panel de Administración":
                 st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
                 st.write(f"📋 Productos: {productos}")
                 if st.button(f"Marcar como Listo #{pedido_id}"):
-                    actualizar_estado_pedido(pedido_id, "Listo")
-                    enviar_whatsapp(f"✅ {nombre_cliente}, tu pedido está listo para recoger. ☕", numero_cliente)
+                    actualizar_estado_pedido(pedido_id, "Listo", numero_cliente)
                     st.success(f"✅ Pedido #{pedido_id} marcado como Listo.")
         else:
             st.info("No hay pedidos pendientes.")
