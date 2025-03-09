@@ -56,6 +56,7 @@ def crear_tablas():
         CREATE TABLE IF NOT EXISTS pedidos (
             id SERIAL PRIMARY KEY,
             nombre_cliente TEXT NOT NULL,
+            numero_cliente TEXT NOT NULL,
             productos TEXT NOT NULL,
             total NUMERIC NOT NULL,
             estado TEXT DEFAULT 'Pendiente'
@@ -78,8 +79,8 @@ def obtener_menu():
 def registrar_pedido(nombre_cliente, numero_cliente, productos, total):
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO pedidos (nombre_cliente, productos, total) VALUES (%s, %s, %s)",
-                   (nombre_cliente, productos, total))
+    cursor.execute("INSERT INTO pedidos (nombre_cliente, numero_cliente, productos, total) VALUES (%s, %s, %s, %s)",
+                   (nombre_cliente, numero_cliente, productos, total))
     conn.commit()
     cursor.close()
     conn.close()
@@ -91,7 +92,7 @@ def registrar_pedido(nombre_cliente, numero_cliente, productos, total):
 def obtener_pedidos():
     conn = conectar_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, nombre_cliente, productos, total, estado FROM pedidos WHERE estado = 'Pendiente'")
+    cursor.execute("SELECT id, nombre_cliente, numero_cliente, productos, total, estado FROM pedidos WHERE estado = 'Pendiente'")
     pedidos = cursor.fetchall()
     cursor.close()
     conn.close()
@@ -144,7 +145,7 @@ if seccion == "Página Principal":
     st.header("🛒 Hacer un Pedido")
     nombre_cliente = st.text_input("Nombre del Cliente")
     numero_cliente = st.text_input("Número de WhatsApp (+52...)")
-    seleccionados = st.multiselect("Selecciona los productos", [f"{nombre} - ${precio:.2f}" for _, nombre, _, precio in menu])
+    seleccionados = st.multiselect("Selecciona los productos", [f"{nombre} - ${precio:.2f}" for _, nombre, precio in menu])
     
     if seleccionados:
         total = sum([float(op.split("$")[-1]) for op in seleccionados])
@@ -201,7 +202,7 @@ elif seccion == "Panel de Administración":
         pedidos = obtener_pedidos()
         if pedidos:
             for pedido in pedidos:
-                pedido_id, nombre_cliente, productos, total, estado = pedido
+                pedido_id, nombre_cliente, numero_cliente, productos, total, estado = pedido
                 st.write(f"📌 **Pedido #{pedido_id}** - {nombre_cliente} - ${total:.2f}")
                 st.write(f"📋 Productos: {productos}")
                 if st.button(f"Marcar como Listo #{pedido_id}"):
